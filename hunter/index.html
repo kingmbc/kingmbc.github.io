@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="build" content="20261115040832">
+<meta name="build" content="20261115041713">
 <script>
 // 홈 화면 앱은 예전 파일을 오래 붙잡고 있을 수 있어서, 열 때마다 서버의 새 버전을 확인하고 바뀌었으면 새로 고침
 (function(){
@@ -421,12 +421,14 @@ const enhTier=enh=>enh<=10?"t1":enh<=20?"t2":"t3";
 // 속도·사거리는 +10까지는 그대로, 그 뒤로는 40%만큼만 올라감
 const softEnh=enh=>Math.min(enh,10)+Math.max(0,enh-10)*.4;
 const needExp=l=>Math.round(20*Math.pow(l,1.6));
+const MAX_LV=2000;  // 최대 레벨: 여기서 멈추고 경험치는 더 쌓이지 않음
 const maxHp=l=>100+18*(l-1);
 
 // ---------- 저장 ----------
 const SAVE_KEY=window.__SAVE_KEY||"hunter-save-v1";
 let S={lv:1,exp:0,gold:0,points:0,owned:{stick:0},equip:"stick",ownedA:{cloth:0},armor:"cloth",kills:0,deaths:0,killsBy:{},arenaKills:0,arenaClears:0,ownedAcc:{},ring:null,neck:null,ownedS:{old:0},shoes:"old",bossProg:[0,0,0,0,0,0,0,0],bossKills:[0,0,0,0,0,0,0,0],pots:{s:0,m:0,l:0},ach:{},title:null,st:{}};
 try{const s=JSON.parse(localStorage.getItem(SAVE_KEY));if(s&&s.lv)S=Object.assign(S,s)}catch(e){}
+if(S.lv>2000){S.lv=2000;S.exp=0}
 S.pots=Object.assign({s:0,m:0,l:0},S.pots||{});S.ach=S.ach||{};S.st=Object.assign({pot:0,skill:0,p2k:0,maxHit:0,p2:0},S.st||{});
 let resetting=false;
 function save(){if(resetting)return;S._saved=Date.now();try{localStorage.setItem(SAVE_KEY,JSON.stringify(S))}catch(e){}}
@@ -913,7 +915,8 @@ function kill(m){
   if(S.kills%100===0){S.points+=2;setTimeout(()=>toast(`누적 ${S.kills.toLocaleString()}마리 처치! 강화 포인트 +2`),900)}
   // 레벨업: 포인트 1개, 5레벨마다 2개 더
   let up=false,gain=0;
-  while(S.exp>=needExp(S.lv)){S.exp-=needExp(S.lv);S.lv++;const g=1+(S.lv%5===0?2:0);S.points+=g;gain+=g;up=true}
+  while(S.lv<MAX_LV&&S.exp>=needExp(S.lv)){S.exp-=needExp(S.lv);S.lv++;const g=1+(S.lv%5===0?2:0);S.points+=g;gain+=g;up=true}
+  if(S.lv>=MAX_LV){S.exp=0;if(up)setTimeout(()=>toast(`최대 레벨 ${MAX_LV} 달성! 축하해요`,true),600)}
   if(up){P.hp=maxHpT();toast(`레벨 ${S.lv} 달성! 강화 포인트 +${gain}${S.lv%5===0?" (5레벨 보너스)":""}`);floatText(P.x,P.y-80,"LEVEL UP!","#62b6f0",24);burst(P.x,pcy(),"#62b6f0",26)}
   dirty=true;
 }
@@ -1826,7 +1829,8 @@ function hud(){
   const mh=maxHpT();
   $("lv").textContent=S.lv;
   $("hptxt").textContent=`${Math.max(0,Math.ceil(P.hp))}/${mh}`;$("hpfill").style.width=Math.max(0,P.hp/mh*100)+"%";
-  $("exptxt").textContent=`${S.exp}/${needExp(S.lv)}`;$("expfill").style.width=(S.exp/needExp(S.lv)*100)+"%";
+  if(S.lv>=MAX_LV){$("exptxt").textContent="MAX";$("expfill").style.width="100%"}
+  else{$("exptxt").textContent=`${S.exp}/${needExp(S.lv)}`;$("expfill").style.width=(S.exp/needExp(S.lv)*100)+"%"}
   $("gold").textContent=S.gold>=1e8?wonText(S.gold):S.gold.toLocaleString()+" G";
 }
 function enhBar(enh){
