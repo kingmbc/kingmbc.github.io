@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="build" content="20261115040312">
+<meta name="build" content="20261115040832">
 <script>
 // 홈 화면 앱은 예전 파일을 오래 붙잡고 있을 수 있어서, 열 때마다 서버의 새 버전을 확인하고 바뀌었으면 새로 고침
 (function(){
@@ -1879,7 +1879,9 @@ function claimable(){if(!S.daily)return 0;const d=S.daily;return d.quests.filter
 // ---------- 업적·칭호 ----------
 const sumB=()=>S.bossKills.reduce((a,b)=>a+(b||0),0);
 const maxEnhAll=()=>Math.max(0,...[S.owned,S.ownedA,S.ownedAcc,S.ownedS].flatMap(o=>Object.values(o||{})));
-const A=(id,name,desc,title,goal,cur,gold,points)=>({id,name,desc,title,goal,cur,r:{gold,points}});
+// 업적 보상은 아래 목록 값의 1/20 (골드·강화 포인트 모두, 반올림)
+const ACH_REWARD=1/20;
+const A=(id,name,desc,title,goal,cur,gold,points)=>({id,name,desc,title,goal,cur,r:{gold:Math.round(gold*ACH_REWARD),points:Math.round(points*ACH_REWARD)}});
 const ACHS=[
   A("k1","첫 사냥","몬스터 1마리 처치","새내기 사냥꾼",1,()=>S.kills,100,1),
   A("k100","사냥 입문","몬스터 100마리 처치","견습 사냥꾼",100,()=>S.kills,2000,2),
@@ -1912,14 +1914,14 @@ const ACHS=[
   A("pvp100","결투장의 왕","PvP 결투 100번 이기기","결투장의 왕",100,()=>(S.pvp||{}).w||0,0,60)
 ];
 const titleOf=id=>{const a=ACHS.find(x=>x.id===id);return a?a.title:null};
-const rewardStr=r=>[r.gold?wonText(r.gold):"",r.points?`강화 포인트 +${r.points}`:""].filter(Boolean).join(" · ");
+const rewardStr=r=>[r.gold?wonText(r.gold):"",r.points?`강화 포인트 +${r.points}`:""].filter(Boolean).join(" · ")||"칭호만";
 const numText=n=>n>=1e12?`${Math.floor(n/1e12).toLocaleString()}조`:n>=1e8?`${Math.floor(n/1e8).toLocaleString()}억`:n>=1e4&&n%1e4===0?`${(n/1e4).toLocaleString()}만`:Math.floor(n).toLocaleString();
 let achNew=0;
 function checkAch(){
   if(S.phase===2)S.st.p2=1;
   for(const a of ACHS){if(S.ach[a.id]||a.cur()<a.goal)continue;
     S.ach[a.id]=1;S.gold+=a.r.gold||0;S.points+=a.r.points||0;if(!S.title)S.title=a.id;achNew++;
-    toast(`업적 달성! 「${a.name}」 · 칭호 《${a.title}》 · ${rewardStr(a.r)}`,true);sfx("ach");burst(P.x,pcy(),"#ffd34d",24);dirty=true}
+    toast(`업적 달성! 「${a.name}」 · 칭호 《${a.title}》${a.r.gold||a.r.points?" · "+rewardStr(a.r):""}`,true);sfx("ach");burst(P.x,pcy(),"#ffd34d",24);dirty=true}
 }
 // 저장 백업: 저장 내용을 글자 코드로 바꿔 복사하고, 붙여넣어 되살리기
 const exportCode=()=>"HUNT1."+btoa(unescape(encodeURIComponent(JSON.stringify(S))));
