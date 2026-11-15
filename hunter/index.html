@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="build" content="20261115034426">
+<meta name="build" content="20261115035201">
 <script>
 // 홈 화면 앱은 예전 파일을 오래 붙잡고 있을 수 있어서, 열 때마다 서버의 새 버전을 확인하고 바뀌었으면 새로 고침
 (function(){
@@ -1019,7 +1019,7 @@ function netOpen(name,onMsg,onPeers){
     const ch=sb.channel(name,{config:{presence:{key:pv.me},broadcast:{self:false}}});let meta=null,ready=false;
     ch.on("broadcast",{event:"m"},({payload})=>{try{onMsg(payload)}catch(e){}});
     ch.on("presence",{event:"sync"},()=>{const st=ch.presenceState(),list=[];for(const k in st){const m=st[k]&&st[k][0];if(m)list.push(m)}onPeers(list)});
-    ch.subscribe(s=>{if(s==="SUBSCRIBED"){ready=true;if(meta)ch.track(meta)}else if(s==="CHANNEL_ERROR"||s==="TIMED_OUT"){pv.err="서버 연결이 불안정해요. 잠시 뒤 다시 시도해 주세요.";pv.ver++}});
+    ch.subscribe(s=>{if(s==="SUBSCRIBED"){ready=true;if(meta)ch.track(meta)}else if(s==="CHANNEL_ERROR"||s==="TIMED_OUT"){pv.err="PvP 서버 연결이 불안정해요. 광고 차단 확장 프로그램이나 회사·학교 네트워크가 막고 있을 수 있어요. 새로 고침하거나 다른 인터넷으로 시험해 보세요.";pv.ver++}});
     return {send:p=>{if(ready)ch.send({type:"broadcast",event:"m",payload:p})},track:m=>{meta=m;if(ready)ch.track(m)},leave:()=>{try{ch.untrack()}catch(e){}try{sb.removeChannel(ch)}catch(e){}}};
   }
   if(PVP_TEST&&"BroadcastChannel" in window){
@@ -1233,9 +1233,11 @@ function pvpOverlay(){
 }
 function pvpPanel(){
   let h="";
+  if(pv.err==="noserver"&&window.__sbFailed)return `<p class="help" style="color:var(--hp)">PvP 서버에 연결하지 못했어요.</p><p class="help">· 광고 차단 확장 프로그램이 있으면 이 사이트에서 꺼 주세요<br>· 회사·학교 네트워크라면 다른 인터넷(휴대폰 핫스팟 등)으로 시험해 보세요<br>· 그다음 새로 고침해 주세요</p>`;
   if(pv.err==="noserver")return `<p class="help">PvP는 다른 사람과 실시간으로 연결해야 해서 <b>Supabase 설정</b>이 필요해요. 게임 파일에 Supabase 주소와 키를 넣은 사이트에서만 열려요.</p>`;
   if(pv.err==="connecting")return `<p class="help">PvP 서버에 연결하는 중이에요…</p>`;
   if(pv.err)h+=`<p class="help" style="color:var(--hp)">${esc(pv.err)}</p>`;
+  h+=`<p class="help">${window.__sbClient?"🟢 PvP 서버 연결됨":PVP_TEST?"🟡 시험 모드 (같은 브라우저 탭끼리)":"⚪ 서버 없음"}</p>`;
   h+=`<div class="item"><h3>내 정보</h3><p>${S.pvp.w}승 ${S.pvp.l}패 · 판돈 수익 ${wonText(Math.max(0,S.pvp.earn))}</p>
     <label class="pvpnick" style="grid-column:1/-1">닉네임 <input id="pvpnick" maxlength="12" value="${esc(S.nick)}" ${pv.room?"disabled":""}></label></div>`;
   if(pv.match)return h+`<p class="help">경기 중이에요. 나가면 진 것으로 처리되고 판돈은 돌려받지 못해요.</p><button class="btn ghost danger" id="pvpleave" type="button">기권하고 나가기</button>`;
@@ -2228,7 +2230,7 @@ const REQUIRE_LOGIN=false;
     window.__sbPending=true;window.__startGame();
     const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
     sc.onload=()=>{try{window.__sbClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false},realtime:{params:{eventsPerSecond:30}}})}catch(e){}window.__sbPending=false;window.dispatchEvent(new Event("sbready"))};
-    sc.onerror=()=>{window.__sbPending=false;window.dispatchEvent(new Event("sbready"))};
+    sc.onerror=()=>{window.__sbPending=false;window.__sbFailed=true;window.dispatchEvent(new Event("sbready"))};
     document.head.appendChild(sc);return;
   }
   const ov=$("authov"),msg=$("authmsg");
