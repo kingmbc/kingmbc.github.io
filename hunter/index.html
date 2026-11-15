@@ -6,6 +6,26 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="build" content="20261115025844">
+<script>
+// 홈 화면 앱은 예전 파일을 오래 붙잡고 있을 수 있어서, 열 때마다 서버의 새 버전을 확인하고 바뀌었으면 새로 고침
+(function(){
+  const mine=(document.querySelector('meta[name=build]')||{}).content;
+  async function check(){
+    try{
+      const r=await fetch(location.pathname,{cache:"reload"});const t=await r.text();
+      const m=t.match(/<meta name="build" content="([^"]+)"/);
+      if(m&&mine&&m[1]!==mine&&sessionStorage.getItem("hunter-upd")!==m[1]){
+        sessionStorage.setItem("hunter-upd",m[1]);
+        if(window.__gameSave)window.__gameSave();
+        location.reload();
+      }
+    }catch(e){}
+  }
+  addEventListener("load",check);
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")check()});
+})();
+</script>
 <meta name="theme-color" content="#141a14">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
