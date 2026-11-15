@@ -3,6 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#141a14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="초원 사냥꾼">
 <title>초원 사냥꾼</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap">
 <style>
@@ -34,6 +42,13 @@ h1{font-family:var(--display);font-weight:400;font-size:1.9rem;margin:0;line-hei
 .gold{font-family:var(--display);font-size:1.3rem;color:var(--gold);white-space:nowrap;font-variant-numeric:tabular-nums}
 
 .stage.full{position:fixed;inset:0;height:auto!important;min-height:0;border-radius:0;border:0;z-index:50}
+/* 화면 꽉 채우기: 아이폰 노치·둥근 모서리·홈 막대에 가리지 않게 */
+.stage.full .hud{top:max(8px,env(safe-area-inset-top,0px));left:max(8px,env(safe-area-inset-left,0px))}
+.stage.full .gamebar{bottom:max(10px,env(safe-area-inset-bottom,0px))}
+.stage.full .touch{bottom:max(12px,env(safe-area-inset-bottom,0px));padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+/* 홈 화면 앱으로 열었을 때: 처음부터 꽉 채우고 전체 화면 버튼은 숨김 */
+.app body{overscroll-behavior:none}
+.app #fullbtn{display:none}
 .stage:fullscreen{border-radius:0;border:0;height:100%}
 .stage{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;position:relative;height:min(80vh,900px);cursor:crosshair;min-height:320px;border-radius:14px;overflow:hidden;border:1px solid var(--line);touch-action:none;background:#3d6b35}
 .stage canvas{display:block;width:100%;height:100%}
@@ -171,6 +186,17 @@ h1{font-family:var(--display);font-weight:400;font-size:1.9rem;margin:0;line-hei
 .volrow input{width:100%;accent-color:var(--gold)}
 @media (pointer:coarse),(max-width:700px){
   .skillbar{left:auto;right:8px;bottom:84px;gap:4px}.skillbar .sep{width:2px}
+  .stage.full .skillbar{right:max(8px,env(safe-area-inset-right,0px))}
+  .stage.full .gamebar{bottom:auto}
+}
+/* 휴대폰 가로 화면: 위쪽 줄에 상태창·메뉴, 아래에 조작 버튼 */
+@media (pointer:coarse) and (orientation:landscape) and (max-height:520px){
+  .hud{width:min(400px,48%);padding:5px 10px!important;gap:3px 10px}
+  .lv{font-size:1.2rem}.gold{font-size:1.05rem}
+  .gamebar{top:calc(max(8px,env(safe-area-inset-top,0px)) + 52px)!important;left:max(8px,env(safe-area-inset-left,0px));right:auto;margin:0;max-width:60%}
+  .toast{top:110px}
+  .main>.top,.main>.help{display:none}
+  .stage{height:calc(100vh - 32px);height:calc(100dvh - 32px)}
   .slot{width:40px;height:40px;font-size:1.05rem}
   .portalbtn{bottom:136px}
 }
@@ -625,6 +651,8 @@ let cssFull=false;
 const isFull=()=>!!document.fullscreenElement||cssFull;
 function fullLabel(){document.getElementById("full-label").textContent=isFull()?"작게 보기":"전체 화면"}
 function setCssFull(on){cssFull=on;stage.classList.toggle("full",on);fullLabel()}
+const appMode=matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches||navigator.standalone===true;
+if(appMode){document.documentElement.classList.add("app");setCssFull(true)}
 function toggleFull(){
   if(document.fullscreenElement){document.exitFullscreen().catch(()=>{});return}
   if(cssFull){setCssFull(false);return}
@@ -1824,7 +1852,7 @@ addEventListener("keydown",e=>{
   if(e.code==="KeyE"){e.preventDefault();const s=portalState();if(s.near)s.act();return}
   if(MENUKEY[e.code]){e.preventDefault();toggleWin(MENUKEY[e.code]);return}
   if(e.code==="KeyF"){e.preventDefault();toggleFull();return}
-  if(e.code==="Escape"&&!openWins.size&&cssFull){e.preventDefault();setCssFull(false);return}
+  if(e.code==="Escape"&&!openWins.size&&cssFull&&!appMode){e.preventDefault();setCssFull(false);return}
   if(e.code==="Escape"&&openWins.size){e.preventDefault();const top=[...openWins.values()].sort((a,b)=>b.el.style.zIndex-a.el.style.zIndex)[0];closeWin(top.id)}
 });
 // 화면 아래 스킬·물약 칸
