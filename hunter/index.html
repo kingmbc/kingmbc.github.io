@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="build" content="20261115032236">
+<meta name="build" content="20261115033546">
 <script>
 // 홈 화면 앱은 예전 파일을 오래 붙잡고 있을 수 있어서, 열 때마다 서버의 새 버전을 확인하고 바뀌었으면 새로 고침
 (function(){
@@ -175,6 +175,10 @@ h1{font-family:var(--display);font-weight:400;font-size:1.9rem;margin:0;line-hei
   .touch{padding:0 8px}.touch>div{gap:8px}
   .touch button{width:50px;height:50px;font-size:1rem}
   .touch button.atk,.touch button.jump{width:60px;height:60px;font-size:.9rem}
+  /* 방향키는 크게: 엄지로 누르기 쉽게 */
+  .touch .pad-l{gap:12px}.touch .pad-l button{width:78px;height:78px;font-size:1.7rem}
+  .touch .pad-r button[data-touch="ArrowDown"]{width:62px;height:62px;font-size:1.35rem}
+
 }
 .pvpnick{display:grid;gap:4px;font-size:.82rem;color:var(--muted)}
 .pvpnick input{font:inherit;color:var(--fg);background:#0d120d;border:1px solid var(--line);border-radius:8px;padding:7px 9px}
@@ -207,10 +211,12 @@ h1{font-family:var(--display);font-weight:400;font-size:1.9rem;margin:0;line-hei
 .volrow{display:grid;gap:4px;background:var(--panel2);border-radius:9px;padding:9px 11px;font-size:.9rem}
 .volrow input{width:100%;accent-color:var(--gold)}
 @media (pointer:coarse),(max-width:700px){
-  .skillbar{left:auto;right:8px;bottom:84px;gap:4px}.skillbar .sep{width:2px}
+  .skillbar{left:auto;right:8px;bottom:100px;gap:4px}.skillbar .sep{width:2px}
   .stage.full .skillbar{right:max(8px,env(safe-area-inset-right,0px))}
   .stage.full .gamebar{bottom:auto}
 }
+/* 좁은 세로 화면: 방향키는 조금 줄여 버튼끼리 겹치지 않게 */
+@media (max-width:420px){.touch .pad-l{gap:8px}.touch .pad-l button{width:68px;height:68px}.touch .pad-r button[data-touch="ArrowDown"]{width:54px;height:54px}}
 /* 휴대폰 가로 화면: 위쪽 줄에 상태창·메뉴, 아래에 조작 버튼 */
 @media (pointer:coarse) and (orientation:landscape) and (max-height:520px){
   .hud{width:min(400px,48%);padding:5px 10px!important;gap:3px 10px}
