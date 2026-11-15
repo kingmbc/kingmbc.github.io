@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="build" content="20261115035647">
+<meta name="build" content="20261115040312">
 <script>
 // 홈 화면 앱은 예전 파일을 오래 붙잡고 있을 수 있어서, 열 때마다 서버의 새 버전을 확인하고 바뀌었으면 새로 고침
 (function(){
@@ -1004,6 +1004,9 @@ function usePot(i){
 // ---------- PvP 결투장: 방을 만들어 다른 플레이어와 실시간 대결 ----------
 // 연결: Supabase Realtime(방 목록 = presence, 위치·공격 = broadcast). ?pvptest 주소면 같은 브라우저 탭끼리 BroadcastChannel로 시험
 const PVP_TEST=new URLSearchParams(location.search).has("pvptest");
+// 결투에 쓸 수 있는 가장 강한 무기 (이보다 비싼 무기를 들고 있으면 방 만들기·입장·준비가 안 됨)
+const PVP_CAP="frost",pvpCapIdx=()=>WEAPONS.findIndex(w=>w.id===PVP_CAP),pvpWeaponOk=()=>WEAPONS.findIndex(w=>w.id===S.equip)<=pvpCapIdx();
+const pvpCapMsg=()=>`결투에는 「${WEAPONS[pvpCapIdx()].name}」까지만 쓸 수 있어요. 상점에서 그 이하 무기로 바꿔 주세요`;
 const PVP_MAX={duel:2,ffa:4},PVP_MODE={duel:"1대1 결투",ffa:"난투 (최대 4명)"},PVP_SEND=1/12;
 let inPvp=false,pvpPhase="",pvpCount=0;
 if(!S.nick)S.nick="사냥꾼"+Math.floor(1000+Math.random()*9000);
@@ -1047,9 +1050,10 @@ function pvpLobbyRoom(){
   pv.lobby.track({id:pv.me,room:r&&r.host===pv.me?{id:r.id,host:pv.me,hostName:S.nick,lock:!!r.pw,mode:r.mode,max:PVP_MAX[r.mode],bet:r.bet,count:Math.max(1,pv.members.length),status:pv.match?"play":"wait"}:null});
 }
 const myEq=()=>({w:S.equip,we:S.owned[S.equip]||0,a:S.armor,r:S.ring,n:S.neck,s:S.shoes});
-const memberMeta=()=>({id:pv.me,name:S.nick,lv:S.lv,gold:S.gold,ready:pv.ready,host:!!pv.room&&pv.room.host===pv.me,j:pv.joinedAt,eq:myEq()});
+const memberMeta=()=>({id:pv.me,name:S.nick,lv:S.lv,gold:S.gold,ready:pv.ready&&pvpWeaponOk(),wok:pvpWeaponOk(),host:!!pv.room&&pv.room.host===pv.me,j:pv.joinedAt,eq:myEq()});
 function pvpCreate(){
-  if(pv.room)return;const bet=Math.max(0,Math.floor(num(pv.bet)));
+  if(pv.room)return;
+  if(!pvpWeaponOk()){toast(pvpCapMsg());sfx("no");return}const bet=Math.max(0,Math.floor(num(pv.bet)));
   if(bet>S.gold){toast("판돈이 가진 골드보다 많아요");sfx("no");return}
   const pw=String(pv.pw||"").trim().slice(0,12);
   pv.room={id:Math.random().toString(36).slice(2,8),mode:pv.mode,bet,host:pv.me,pw};pvpJoinChannel();
@@ -1057,6 +1061,7 @@ function pvpCreate(){
 }
 function pvpJoin(r){
   if(pv.room||!r)return;
+  if(!pvpWeaponOk()){toast(pvpCapMsg());sfx("no");return}
   if(r.status==="play"){toast("이미 경기 중인 방이에요");return}
   if(r.count>=r.max){toast("방이 가득 찼어요");return}
   if(r.bet>S.gold){toast(`판돈 ${wonText(r.bet)}이 필요해요`);sfx("no");return}
@@ -1097,7 +1102,7 @@ function pvpPeersChanged(){
 }
 function pvpCanStart(){
   if(!pv.room||pv.room.host!==pv.me||pv.match)return false;const ms=pv.members;
-  return ms.length>=2&&ms.length<=PVP_MAX[pv.room.mode]&&ms.every(m=>m.host||m.ready)&&ms.every(m=>num(m.gold)>=pv.room.bet);
+  return pvpWeaponOk()&&ms.length>=2&&ms.length<=PVP_MAX[pv.room.mode]&&ms.every(m=>m.host||m.ready)&&ms.every(m=>m.wok!==false&&num(m.gold)>=pv.room.bet);
 }
 function pvpStartHost(){
   if(!pvpCanStart())return;
@@ -1195,6 +1200,12 @@ function pvpAttack(aimPt){
   if(ranged){pvpShoot(ax,ay,dmg,w);return true}
   P.swing=Math.max(P.swing,.12);sfx(w.kind==="cleave"?"swingBig":"swing");return false;
 }
+let pvpLastEq="",pvpWatchT=0;
+function pvpWatchEquip(){
+  if(!pv.room||pv.match||!pv.ch||Date.now()-pvpWatchT<1000)return;pvpWatchT=Date.now();const k=S.equip+"/"+(S.owned[S.equip]||0)+"/"+S.armor+"/"+S.gold;if(k===pvpLastEq)return;pvpLastEq=k;
+  if(pv.ready&&!pvpWeaponOk()){pv.ready=false;toast(pvpCapMsg())}
+  pv.ch.track(memberMeta());pv.ver++;
+}
 function pvpUpdate(dt){
   if(pvpPhase==="count"){pvpCount-=dt;if(pvpCount<=0){pvpPhase="fight";toast("싸워라!",true)}}
   for(const id in pv.peers){const o=pv.peers[id],k=Math.min(1,dt*14);o.x+=(o.tx-o.x)*k;o.y+=(o.ty-o.y)*k}
@@ -1252,7 +1263,8 @@ function pvpPanel(){
     pv.rooms.forEach((r,i)=>{const full=r.count>=r.max,play=r.status==="play",poor=r.bet>S.gold;
       h+=`<div class="item"><h3>${r.lock?"🔒 ":""}${esc(r.hostName||"사냥꾼")}의 방 <em>${PVP_MODE[r.mode]||""}</em></h3><p>판돈 ${r.bet?wonText(r.bet):"없음"} · ${r.count}/${r.max}명 · ${play?"경기 중":"기다리는 중"}${poor?" · 골드 부족":""}</p>
         <div class="act"><button class="btn" type="button" data-pvpjoin="${i}" ${full||play||poor?"disabled":""}>입장</button></div></div>`});
-    h+=`<p class="help">규칙: 모든 장비 그대로 · 스킬 사용 불가 · 물약 사용 가능 · 마지막까지 살아남은 사람이 판돈을 모두 가져가요.</p>`;
+    if(!pvpWeaponOk())h+=`<p class="help" style="color:var(--hp)">⚠ ${pvpCapMsg()}. 지금 무기: ${weapon().name}</p>`;
+    h+=`<p class="help">규칙: 무기는 「${WEAPONS[pvpCapIdx()].name}」까지 · 그 밖의 장비는 그대로 · 스킬 사용 불가 · 물약 사용 가능 · 마지막까지 살아남은 사람이 판돈을 모두 가져가요.</p>`;
     h+=`<h4>방 만들기</h4><div class="subtabs" style="grid-template-columns:1fr 1fr">${["duel","ffa"].map(m=>`<button type="button" data-pvpmode="${m}" aria-pressed="${pv.mode===m}">${PVP_MODE[m]}</button>`).join("")}</div>
       <label class="pvpnick">판돈 (골드) <input id="pvpbet" inputmode="numeric" value="${esc(pv.bet)}"></label>
       <div class="bk">${[0,1e4,1e6,1e8].map(v=>`<button class="btn ghost" type="button" data-pvpbet="${v}">${v?wonText(v):"없음"}</button>`).join("")}<button class="btn ghost" type="button" data-pvpbet="all">전부</button></div>
@@ -1264,8 +1276,9 @@ function pvpPanel(){
   const r=pv.room,host=r.host===pv.me,pot=r.bet*Math.max(1,pv.members.length);
   h+=`<div class="points"><span>${r.pw?"🔒 ":""}${PVP_MODE[r.mode]} · 판돈 ${r.bet?wonText(r.bet):"없음"}</span><b>${pv.members.length}/${PVP_MAX[r.mode]}</b></div>`;
   if(r.pw&&host)h+=`<p class="help">🔒 비밀번호 <b>${esc(r.pw)}</b> · 함께 할 사람에게 알려 주세요</p>`;
-  pv.members.forEach(m=>{h+=`<div class="item${m.id===pv.me?" equipped":""}"><h3>${esc(m.name)} <em>Lv ${num(m.lv)}</em></h3><p>${m.host?"방장":m.ready?"준비 완료":"준비 안 됨"}${num(m.gold)<r.bet?" · 골드 부족":""}</p><div class="act">${m.host?`<span class="tag">방장</span>`:m.ready?`<span class="tag">준비</span>`:`<span class="lock">대기</span>`}</div></div>`});
+  pv.members.forEach(m=>{h+=`<div class="item${m.id===pv.me?" equipped":""}"><h3>${esc(m.name)} <em>Lv ${num(m.lv)}</em></h3><p>${m.host?"방장":m.ready?"준비 완료":"준비 안 됨"}${num(m.gold)<r.bet?" · 골드 부족":""}${m.wok===false?" · ⚠ 무기가 너무 강함":""}</p><div class="act">${m.host?`<span class="tag">방장</span>`:m.ready?`<span class="tag">준비</span>`:`<span class="lock">대기</span>`}</div></div>`});
   h+=`<p class="help">시작하면 각자 판돈 ${r.bet?wonText(r.bet):"0 G"}을 내고, 이긴 사람이 합계 ${wonText(pot)}을 가져가요.</p>`;
+  if(!pvpWeaponOk())h+=`<p class="help" style="color:var(--hp)">⚠ ${pvpCapMsg()}</p>`;
   if(host)h+=`<button class="btn" id="pvpstart" type="button" ${pvpCanStart()?"":"disabled"}>시작${pv.members.length<2?" (상대를 기다리는 중)":pvpCanStart()?"":" (모두 준비하면 시작)"}</button>`;
   else h+=`<button class="btn" id="pvpready" type="button">${pv.ready?"준비 취소":"준비"}</button>`;
   h+=`<button class="btn ghost" id="pvpleave" type="button">방 나가기</button>`;
@@ -2079,7 +2092,7 @@ $("wins").addEventListener("click",e=>{
   if(b.dataset.pvpbet!==undefined){pv.bet=b.dataset.pvpbet==="all"?String(S.gold):b.dataset.pvpbet;pv.ver++;return}
   if(b.id==="pvpcreate"){pvpCreate();return}
   if(b.dataset.pvpjoin!==undefined){pvpJoin(pv.rooms[+b.dataset.pvpjoin]);return}
-  if(b.id==="pvpready"){pv.ready=!pv.ready;pv.ch&&pv.ch.track(memberMeta());pv.ver++;sfx("ui");return}
+  if(b.id==="pvpready"){if(!pv.ready&&!pvpWeaponOk()){toast(pvpCapMsg());sfx("no");return}pv.ready=!pv.ready;pv.ch&&pv.ch.track(memberMeta());pv.ver++;sfx("ui");return}
   if(b.id==="pvpstart"){pvpStartHost();return}
   if(b.id==="pvpleave"){pvpLeave();toast("방에서 나왔어요");return}
   if(b.dataset.title!==undefined){S.title=b.dataset.title||null;toast(S.title?`칭호 《${titleOf(S.title)}》을(를) 달았어요`:"칭호를 뗐어요")}
@@ -2207,7 +2220,7 @@ let last=performance.now(),saveT=0,achT=0;
 function loop(now){
   const dt=Math.min(.05,(now-last)/1000);last=now;
   if(!paused&&!windowsPause())update(dt);
-  draw();hud();badges();skillbarUI();if(!paused)bgmTick();
+  draw();hud();badges();skillbarUI();pvpWatchEquip();if(!paused)bgmTick();
   achT+=dt;if(achT>1){achT=0;checkAch()}
   {const pb=$("portalbtn"),s=portalState();if(pb.hidden===s.near)pb.hidden=!s.near;if(s.near&&pb.textContent!==s.txt)pb.textContent=s.txt;pb.classList.toggle("red",!!s.red)}
   // 내용이 바뀐 창만 다시 그리기
