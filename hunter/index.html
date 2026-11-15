@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="build" content="20261115031630">
+<meta name="build" content="20261115032236">
 <script>
 // 홈 화면 앱은 예전 파일을 오래 붙잡고 있을 수 있어서, 열 때마다 서버의 새 버전을 확인하고 바뀌었으면 새로 고침
 (function(){
@@ -1002,7 +1002,7 @@ const PVP_MAX={duel:2,ffa:4},PVP_MODE={duel:"1대1 결투",ffa:"난투 (최대 4
 let inPvp=false,pvpPhase="",pvpCount=0;
 if(!S.nick)S.nick="사냥꾼"+Math.floor(1000+Math.random()*9000);
 S.pvp=Object.assign({w:0,l:0,earn:0},S.pvp||{});
-const pv={me:"",lobby:null,ch:null,room:null,rooms:[],members:[],peers:{},match:null,ready:false,ver:0,sendT:0,err:"",mode:"duel",bet:"0",sawHost:false,joinedAt:0};
+const pv={me:"",lobby:null,ch:null,room:null,rooms:[],members:[],peers:{},match:null,ready:false,ver:0,sendT:0,err:"",mode:"duel",bet:"0",pw:"",sawHost:false,joinedAt:0};
 try{pv.me=sessionStorage.getItem("hunter-pvp-id")||""}catch(e){}
 if(!pv.me){pv.me=Math.random().toString(36).slice(2,10);try{sessionStorage.setItem("hunter-pvp-id",pv.me)}catch(e){}}
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -1025,8 +1025,10 @@ function netOpen(name,onMsg,onPeers){
   }
   return null;
 }
+addEventListener("sbready",()=>{if(pv.err==="connecting"){pv.err="";pvpOpenLobby()}});
 function pvpOpenLobby(){
   if(pv.lobby)return;
+  if(!window.__sbClient&&window.__sbPending){pv.err="connecting";pv.ver++;return}
   pv.lobby=netOpen("hunter-pvp-lobby",()=>{},list=>{pv.rooms=list.filter(m=>m&&m.room).map(m=>m.room);pv.ver++});
   if(!pv.lobby){pv.err="noserver";pv.ver++;return}
   pvpLobbyRoom();
@@ -1034,14 +1036,15 @@ function pvpOpenLobby(){
 // 방장은 로비에 방 정보를 띄워 둠 (인원·상태가 바뀔 때마다 갱신)
 function pvpLobbyRoom(){
   if(!pv.lobby)return;const r=pv.room;
-  pv.lobby.track({id:pv.me,room:r&&r.host===pv.me?{id:r.id,host:pv.me,hostName:S.nick,mode:r.mode,max:PVP_MAX[r.mode],bet:r.bet,count:Math.max(1,pv.members.length),status:pv.match?"play":"wait"}:null});
+  pv.lobby.track({id:pv.me,room:r&&r.host===pv.me?{id:r.id,host:pv.me,hostName:S.nick,lock:!!r.pw,mode:r.mode,max:PVP_MAX[r.mode],bet:r.bet,count:Math.max(1,pv.members.length),status:pv.match?"play":"wait"}:null});
 }
 const myEq=()=>({w:S.equip,we:S.owned[S.equip]||0,a:S.armor,r:S.ring,n:S.neck,s:S.shoes});
 const memberMeta=()=>({id:pv.me,name:S.nick,lv:S.lv,gold:S.gold,ready:pv.ready,host:!!pv.room&&pv.room.host===pv.me,j:pv.joinedAt,eq:myEq()});
 function pvpCreate(){
   if(pv.room)return;const bet=Math.max(0,Math.floor(num(pv.bet)));
   if(bet>S.gold){toast("판돈이 가진 골드보다 많아요");sfx("no");return}
-  pv.room={id:Math.random().toString(36).slice(2,8),mode:pv.mode,bet,host:pv.me};pvpJoinChannel();
+  const pw=String(pv.pw||"").trim().slice(0,12);
+  pv.room={id:Math.random().toString(36).slice(2,8),mode:pv.mode,bet,host:pv.me,pw};pvpJoinChannel();
   toast(`${PVP_MODE[pv.mode]} 방을 만들었어요. 다른 사람이 들어오길 기다려요`);
 }
 function pvpJoin(r){
@@ -1049,13 +1052,18 @@ function pvpJoin(r){
   if(r.status==="play"){toast("이미 경기 중인 방이에요");return}
   if(r.count>=r.max){toast("방이 가득 찼어요");return}
   if(r.bet>S.gold){toast(`판돈 ${wonText(r.bet)}이 필요해요`);sfx("no");return}
-  pv.room={id:r.id,mode:r.mode,bet:r.bet,host:r.host};pvpJoinChannel();
+  let pw="";
+  if(r.lock){pw=(prompt("🔒 비밀번호를 입력하세요")||"").trim();if(!pw)return}
+  pv.room={id:r.id,mode:r.mode,bet:r.bet,host:r.host,pw,lock:!!r.lock};pvpJoinChannel();
 }
 function pvpJoinChannel(){
   pv.ready=false;pv.members=[];pv.sawHost=pv.room.host===pv.me;pv.joinedAt=Date.now();
-  pv.ch=netOpen("hunter-pvp-room-"+pv.room.id,pvpMsg,list=>{pv.members=list.filter(m=>m&&m.id).sort((a,b)=>(b.host?1:0)-(a.host?1:0)||a.j-b.j);pvpPeersChanged();pv.ver++});
+  const pwKey=pv.room.pw?"-"+[...pv.room.pw].reduce((h,c)=>Math.imul(h^c.charCodeAt(0),16777619)>>>0,2166136261).toString(36):"";
+  pv.ch=netOpen("hunter-pvp-room-"+pv.room.id+pwKey,pvpMsg,list=>{pv.members=list.filter(m=>m&&m.id).sort((a,b)=>(b.host?1:0)-(a.host?1:0)||a.j-b.j);pvpPeersChanged();pv.ver++});
   if(!pv.ch){pv.room=null;pv.err="noserver";pv.ver++;return}
   pv.ch.track(memberMeta());pvpLobbyRoom();pv.ver++;
+  const room=pv.room;
+  setTimeout(()=>{if(pv.room===room&&!pv.sawHost){toast(room.lock?"비밀번호가 틀렸어요":"방에 들어가지 못했어요. 방이 닫혔을 수 있어요");sfx("no");pvpLeave()}},5000);
 }
 function pvpLeave(){
   if(pv.match&&!pv.match.over&&!P.pvpDead&&pv.ch){pv.match.dead[pv.me]=true;pv.ch.send({t:"dead",id:pv.me,by:null})}
@@ -1068,7 +1076,7 @@ function pvpPeersChanged(){
   if(!pv.room)return;const ids=pv.members.map(m=>m.id),r=pv.room;
   if(ids.includes(r.host))pv.sawHost=true;
   // 방장이 나감
-  if(r.host!==pv.me&&!ids.includes(r.host)&&(pv.sawHost||Date.now()-pv.joinedAt>6000)){
+  if(r.host!==pv.me&&!ids.includes(r.host)&&pv.sawHost){
     if(pv.match&&!pv.match.over){S.gold+=pv.match.bet;toast("방장이 나가서 경기가 취소됐어요. 판돈을 돌려받았어요",true)}
     else toast("방장이 나가서 방이 닫혔어요");
     pv.match=null;if(pv.ch){pv.ch.leave();pv.ch=null}pv.room=null;pv.members=[];if(inPvp)pvpExitArena();save();pv.ver++;return;
@@ -1220,25 +1228,29 @@ function pvpOverlay(){
 function pvpPanel(){
   let h="";
   if(pv.err==="noserver")return `<p class="help">PvP는 다른 사람과 실시간으로 연결해야 해서 <b>Supabase 설정</b>이 필요해요. 게임 파일에 Supabase 주소와 키를 넣은 사이트에서만 열려요.</p>`;
+  if(pv.err==="connecting")return `<p class="help">PvP 서버에 연결하는 중이에요…</p>`;
   if(pv.err)h+=`<p class="help" style="color:var(--hp)">${esc(pv.err)}</p>`;
   h+=`<div class="item"><h3>내 정보</h3><p>${S.pvp.w}승 ${S.pvp.l}패 · 판돈 수익 ${wonText(Math.max(0,S.pvp.earn))}</p>
     <label class="pvpnick" style="grid-column:1/-1">닉네임 <input id="pvpnick" maxlength="12" value="${esc(S.nick)}" ${pv.room?"disabled":""}></label></div>`;
   if(pv.match)return h+`<p class="help">경기 중이에요. 나가면 진 것으로 처리되고 판돈은 돌려받지 못해요.</p><button class="btn ghost danger" id="pvpleave" type="button">기권하고 나가기</button>`;
   if(!pv.room){
+    h+=`<h4>열린 방 (${pv.rooms.length})</h4>`;
+    if(!pv.rooms.length)h+=`<p class="help">아직 열린 방이 없어요. 방을 만들어 친구를 기다려 보세요.</p>`;
+    pv.rooms.forEach((r,i)=>{const full=r.count>=r.max,play=r.status==="play",poor=r.bet>S.gold;
+      h+=`<div class="item"><h3>${r.lock?"🔒 ":""}${esc(r.hostName||"사냥꾼")}의 방 <em>${PVP_MODE[r.mode]||""}</em></h3><p>판돈 ${r.bet?wonText(r.bet):"없음"} · ${r.count}/${r.max}명 · ${play?"경기 중":"기다리는 중"}${poor?" · 골드 부족":""}</p>
+        <div class="act"><button class="btn" type="button" data-pvpjoin="${i}" ${full||play||poor?"disabled":""}>입장</button></div></div>`});
+    h+=`<p class="help">규칙: 모든 장비 그대로 · 스킬 사용 불가 · 물약 사용 가능 · 마지막까지 살아남은 사람이 판돈을 모두 가져가요.</p>`;
     h+=`<h4>방 만들기</h4><div class="subtabs" style="grid-template-columns:1fr 1fr">${["duel","ffa"].map(m=>`<button type="button" data-pvpmode="${m}" aria-pressed="${pv.mode===m}">${PVP_MODE[m]}</button>`).join("")}</div>
       <label class="pvpnick">판돈 (골드) <input id="pvpbet" inputmode="numeric" value="${esc(pv.bet)}"></label>
       <div class="bk">${[0,1e4,1e6,1e8].map(v=>`<button class="btn ghost" type="button" data-pvpbet="${v}">${v?wonText(v):"없음"}</button>`).join("")}<button class="btn ghost" type="button" data-pvpbet="all">전부</button></div>
+      <label class="pvpnick">비밀번호 (선택 · 아는 사람만 들어오게) <input id="pvppw" maxlength="12" autocomplete="off" placeholder="비워 두면 누구나 입장" value="${esc(pv.pw)}"></label>
       <button class="btn" id="pvpcreate" type="button">방 만들기</button>
-      <h4>열린 방 (${pv.rooms.length})</h4>`;
-    if(!pv.rooms.length)h+=`<p class="help">아직 열린 방이 없어요. 방을 만들어 친구를 기다려 보세요.</p>`;
-    pv.rooms.forEach((r,i)=>{const full=r.count>=r.max,play=r.status==="play",poor=r.bet>S.gold;
-      h+=`<div class="item"><h3>${esc(r.hostName||"사냥꾼")}의 방 <em>${PVP_MODE[r.mode]||""}</em></h3><p>판돈 ${r.bet?wonText(r.bet):"없음"} · ${r.count}/${r.max}명 · ${play?"경기 중":"기다리는 중"}${poor?" · 골드 부족":""}</p>
-        <div class="act"><button class="btn" type="button" data-pvpjoin="${i}" ${full||play||poor?"disabled":""}>입장</button></div></div>`});
-    h+=`<p class="help">규칙: 모든 장비 그대로 · 스킬 사용 불가 · 물약 사용 가능 · 마지막까지 살아남은 사람이 판돈을 모두 가져가요.</p>`;
+`;
     return h;
   }
   const r=pv.room,host=r.host===pv.me,pot=r.bet*Math.max(1,pv.members.length);
-  h+=`<div class="points"><span>${PVP_MODE[r.mode]} · 판돈 ${r.bet?wonText(r.bet):"없음"}</span><b>${pv.members.length}/${PVP_MAX[r.mode]}</b></div>`;
+  h+=`<div class="points"><span>${r.pw?"🔒 ":""}${PVP_MODE[r.mode]} · 판돈 ${r.bet?wonText(r.bet):"없음"}</span><b>${pv.members.length}/${PVP_MAX[r.mode]}</b></div>`;
+  if(r.pw&&host)h+=`<p class="help">🔒 비밀번호 <b>${esc(r.pw)}</b> · 함께 할 사람에게 알려 주세요</p>`;
   pv.members.forEach(m=>{h+=`<div class="item${m.id===pv.me?" equipped":""}"><h3>${esc(m.name)} <em>Lv ${num(m.lv)}</em></h3><p>${m.host?"방장":m.ready?"준비 완료":"준비 안 됨"}${num(m.gold)<r.bet?" · 골드 부족":""}</p><div class="act">${m.host?`<span class="tag">방장</span>`:m.ready?`<span class="tag">준비</span>`:`<span class="lock">대기</span>`}</div></div>`});
   h+=`<p class="help">시작하면 각자 판돈 ${r.bet?wonText(r.bet):"0 G"}을 내고, 이긴 사람이 합계 ${wonText(pot)}을 가져가요.</p>`;
   if(host)h+=`<button class="btn" id="pvpstart" type="button" ${pvpCanStart()?"":"disabled"}>시작${pv.members.length<2?" (상대를 기다리는 중)":pvpCanStart()?"":" (모두 준비하면 시작)"}</button>`;
@@ -2110,7 +2122,7 @@ function winSig(id){
 function renderWin(id){const w=openWins.get(id);w.el.querySelector(".wbody").innerHTML=panelHTML(id);w.sig=winSig(id)}
 document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>toggleWin(b.dataset.open));
 $("wins").addEventListener("pointerdown",e=>{const win=e.target.closest(".win");if(win)front(win.dataset.win)});
-$("wins").addEventListener("input",e=>{if(e.target.id==="pvpbet"){pv.bet=e.target.value.replace(/[^0-9]/g,"");return}const k=e.target.dataset.setr;if(k){SET[k]=+e.target.value;saveSet();applyVol();const v=$("volv");if(v)v.textContent=Math.round(SET.vol*100)+"%"}});
+$("wins").addEventListener("input",e=>{if(e.target.id==="pvpbet"){pv.bet=e.target.value.replace(/[^0-9]/g,"");return}if(e.target.id==="pvppw"){pv.pw=e.target.value;return}const k=e.target.dataset.setr;if(k){SET[k]=+e.target.value;saveSet();applyVol();const v=$("volv");if(v)v.textContent=Math.round(SET.vol*100)+"%"}});
 $("wins").addEventListener("change",e=>{if(e.target.id==="pvpnick"){const v=e.target.value.trim().slice(0,12);if(v){S.nick=v;save();pvpLobbyRoom();toast(`닉네임을 「${v}」(으)로 바꿨어요`)}pv.ver++;return}
   const k=e.target.dataset.set;if(k){SET[k]=e.target.checked;saveSet();applyVol();sfx("ui");if(k==="auto")toast(SET.auto?"자동 공격을 켰어요":"자동 공격을 껐어요")}});
 // 제목 줄 끌어서 창 옮기기
@@ -2200,9 +2212,19 @@ addEventListener("pagehide",()=>{save();try{if(pv.ch)pv.ch.leave();if(pv.lobby)p
 // 아래 두 값을 넣으면 로그인과 계정 저장이 켜져요. 비워 두면 지금처럼 이 브라우저에만 저장해요.
 const SUPABASE_URL="";
 const SUPABASE_ANON_KEY="";
+// true: 초대한 사람만 이메일로 로그인해서 플레이 (기록을 계정에 저장)
+// false: 로그인 없이 바로 플레이. Supabase는 PvP 연결에만 쓰고, 기록은 지금처럼 이 브라우저에 저장
+const REQUIRE_LOGIN=false;
 (function(){
   const $=id=>document.getElementById(id);
   if(!SUPABASE_URL||!SUPABASE_ANON_KEY){const q=new URLSearchParams(location.search);if(q.has("pvptest")&&q.get("slot"))window.__SAVE_KEY="hunter-save-v1-"+q.get("slot");window.__startGame();return}
+  if(!REQUIRE_LOGIN){
+    window.__sbPending=true;window.__startGame();
+    const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
+    sc.onload=()=>{try{window.__sbClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false},realtime:{params:{eventsPerSecond:30}}})}catch(e){}window.__sbPending=false;window.dispatchEvent(new Event("sbready"))};
+    sc.onerror=()=>{window.__sbPending=false;window.dispatchEvent(new Event("sbready"))};
+    document.head.appendChild(sc);return;
+  }
   const ov=$("authov"),msg=$("authmsg");
   const show=v=>{ov.hidden=false;ov.querySelectorAll("[data-view]").forEach(e=>e.hidden=e.dataset.view!==v)};
   const showErr=t=>{$("autherr").textContent=t;show("error")};
