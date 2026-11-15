@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="build" content="20261115025844">
+<meta name="build" content="20261115030221">
 <script>
 // 홈 화면 앱은 예전 파일을 오래 붙잡고 있을 수 있어서, 열 때마다 서버의 새 버전을 확인하고 바뀌었으면 새로 고침
 (function(){
@@ -1858,8 +1858,9 @@ function switchPhase(){
 function portalState(){
   if(P.dead>0)return {near:false};
   if(inArena)return {near:Math.abs(P.x-ARENA_EXIT)<90,txt:"마을로 돌아가기 (E)",act:exitArena};
-  if(Math.abs(P.x-PORTAL_X)<90)return {near:true,txt:S.lv<ARENA_REQ?`보스의 땅 · Lv ${ARENA_REQ} 이상 입장`:"보스의 땅으로 이동 (E)",act:usePortal};
-  if(Math.abs(P.x-PHASE_X)<90)return {near:true,txt:PH()===2?"1페이즈 세계로 (E)":S.lv<PHASE_REQ?`2페이즈 세계 · Lv ${PHASE_REQ} 이상`:"2페이즈 세계로 (E)",act:switchPhase,red:true};
+  // 입장 레벨이 안 되면 버튼을 아예 띄우지 않음
+  if(Math.abs(P.x-PORTAL_X)<90&&S.lv>=ARENA_REQ)return {near:true,txt:"보스의 땅으로 이동 (E)",act:usePortal};
+  if(Math.abs(P.x-PHASE_X)<90&&(PH()===2||S.lv>=PHASE_REQ))return {near:true,txt:PH()===2?"1페이즈 세계로 (E)":"2페이즈 세계로 (E)",act:switchPhase,red:true};
   return {near:false};
 }
 $("portalbtn").onpointerdown=e=>e.stopPropagation();$("portalbtn").onclick=()=>{const s=portalState();if(s.near)s.act()};
