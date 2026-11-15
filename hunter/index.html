@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="build" content="20261115035201">
+<meta name="build" content="20261115035647">
 <script>
 // 홈 화면 앱은 예전 파일을 오래 붙잡고 있을 수 있어서, 열 때마다 서버의 새 버전을 확인하고 바뀌었으면 새로 고침
 (function(){
@@ -1008,18 +1008,18 @@ const PVP_MAX={duel:2,ffa:4},PVP_MODE={duel:"1대1 결투",ffa:"난투 (최대 4
 let inPvp=false,pvpPhase="",pvpCount=0;
 if(!S.nick)S.nick="사냥꾼"+Math.floor(1000+Math.random()*9000);
 S.pvp=Object.assign({w:0,l:0,earn:0},S.pvp||{});
-const pv={me:"",lobby:null,ch:null,room:null,rooms:[],members:[],peers:{},match:null,ready:false,ver:0,sendT:0,err:"",mode:"duel",bet:"0",pw:"",sawHost:false,joinedAt:0};
+const pv={me:"",lobby:null,ch:null,room:null,rooms:[],members:[],peers:{},match:null,ready:false,ver:0,sendT:0,err:"",mode:"duel",bet:"0",pw:"",conn:"",sawHost:false,joinedAt:0};
 try{pv.me=sessionStorage.getItem("hunter-pvp-id")||""}catch(e){}
 if(!pv.me){pv.me=Math.random().toString(36).slice(2,10);try{sessionStorage.setItem("hunter-pvp-id",pv.me)}catch(e){}}
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const num=(v,d)=>{v=Number(v);return isFinite(v)?v:(d||0)};
-function netOpen(name,onMsg,onPeers){
+function netOpen(name,onMsg,onPeers,onStatus){
   const sb=window.__sbClient;
   if(sb){
     const ch=sb.channel(name,{config:{presence:{key:pv.me},broadcast:{self:false}}});let meta=null,ready=false;
     ch.on("broadcast",{event:"m"},({payload})=>{try{onMsg(payload)}catch(e){}});
     ch.on("presence",{event:"sync"},()=>{const st=ch.presenceState(),list=[];for(const k in st){const m=st[k]&&st[k][0];if(m)list.push(m)}onPeers(list)});
-    ch.subscribe(s=>{if(s==="SUBSCRIBED"){ready=true;if(meta)ch.track(meta)}else if(s==="CHANNEL_ERROR"||s==="TIMED_OUT"){pv.err="PvP 서버 연결이 불안정해요. 광고 차단 확장 프로그램이나 회사·학교 네트워크가 막고 있을 수 있어요. 새로 고침하거나 다른 인터넷으로 시험해 보세요.";pv.ver++}});
+    ch.subscribe(s=>{if(onStatus)onStatus(s);if(s==="SUBSCRIBED"){ready=true;if(meta)ch.track(meta)}else if(s==="CHANNEL_ERROR"||s==="TIMED_OUT"){pv.err="PvP 서버 연결이 불안정해요. 광고 차단 확장 프로그램이나 회사·학교 네트워크가 막고 있을 수 있어요. 새로 고침하거나 다른 인터넷으로 시험해 보세요.";pv.ver++}});
     return {send:p=>{if(ready)ch.send({type:"broadcast",event:"m",payload:p})},track:m=>{meta=m;if(ready)ch.track(m)},leave:()=>{try{ch.untrack()}catch(e){}try{sb.removeChannel(ch)}catch(e){}}};
   }
   if(PVP_TEST&&"BroadcastChannel" in window){
@@ -1035,8 +1035,10 @@ addEventListener("sbready",()=>{if(pv.err==="connecting"){pv.err="";pvpOpenLobby
 function pvpOpenLobby(){
   if(pv.lobby)return;
   if(!window.__sbClient&&window.__sbPending){pv.err="connecting";pv.ver++;return}
-  pv.lobby=netOpen("hunter-pvp-lobby",()=>{},list=>{pv.rooms=list.filter(m=>m&&m.room).map(m=>m.room);pv.ver++});
+  pv.conn=window.__sbClient?"wait":"ok";
+  pv.lobby=netOpen("hunter-pvp-lobby",()=>{},list=>{pv.rooms=list.filter(m=>m&&m.room).map(m=>m.room);pv.ver++},st=>{if(st==="SUBSCRIBED"){pv.conn="ok";pv.err=""}else if(st==="CHANNEL_ERROR"||st==="TIMED_OUT"||st==="CLOSED"){if(pv.conn!=="ok")pv.conn="fail"}pv.ver++});
   if(!pv.lobby){pv.err="noserver";pv.ver++;return}
+  setTimeout(()=>{if(pv.conn==="wait"){pv.conn="fail";pv.ver++}},8000);
   pvpLobbyRoom();
 }
 // 방장은 로비에 방 정보를 띄워 둠 (인원·상태가 바뀔 때마다 갱신)
@@ -1237,6 +1239,9 @@ function pvpPanel(){
   if(pv.err==="noserver")return `<p class="help">PvP는 다른 사람과 실시간으로 연결해야 해서 <b>Supabase 설정</b>이 필요해요. 게임 파일에 Supabase 주소와 키를 넣은 사이트에서만 열려요.</p>`;
   if(pv.err==="connecting")return `<p class="help">PvP 서버에 연결하는 중이에요…</p>`;
   if(pv.err)h+=`<p class="help" style="color:var(--hp)">${esc(pv.err)}</p>`;
+  const site="https://kingmbc.github.io/hunter/",onSite=location.hostname==="kingmbc.github.io";
+  if(pv.conn==="fail")return `<p class="help" style="color:var(--hp)">🔴 PvP 서버에 연결하지 못했어요.</p><p class="help">${onSite?"· 광고 차단 확장 프로그램이 있으면 이 사이트에서 꺼 주세요<br>· 회사·학교 네트워크라면 다른 인터넷(휴대폰 핫스팟 등)으로 시험해 보세요<br>· 그다음 새로 고침해 주세요":`이 화면에서는 외부 서버 연결이 막혀 있을 수 있어요. PvP는 아래 사이트에서 해 주세요.<br><b>${site}</b>`}</p>`;
+  if(pv.conn==="wait")return `<p class="help">🟡 PvP 서버에 연결하는 중이에요…</p>`;
   h+=`<p class="help">${window.__sbClient?"🟢 PvP 서버 연결됨":PVP_TEST?"🟡 시험 모드 (같은 브라우저 탭끼리)":"⚪ 서버 없음"}</p>`;
   h+=`<div class="item"><h3>내 정보</h3><p>${S.pvp.w}승 ${S.pvp.l}패 · 판돈 수익 ${wonText(Math.max(0,S.pvp.earn))}</p>
     <label class="pvpnick" style="grid-column:1/-1">닉네임 <input id="pvpnick" maxlength="12" value="${esc(S.nick)}" ${pv.room?"disabled":""}></label></div>`;
